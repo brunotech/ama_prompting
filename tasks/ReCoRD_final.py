@@ -96,8 +96,7 @@ def f1_score(prediction, ground_truth):
         return 0
     precision = 1.0 * num_same / len(prediction_tokens)
     recall = 1.0 * num_same / len(ground_truth_tokens)
-    f1 = (2 * precision * recall) / (precision + recall)
-    return f1
+    return (2 * precision * recall) / (precision + recall)
 
 def exact_match_score(prediction, ground_truth):
     return normalize_answer(prediction) == normalize_answer(ground_truth)
@@ -135,7 +134,7 @@ class ReCoRDDecomp(Decomposition):
             passage = unicodedata.normalize("NFKD", passage)
             for q in ex["qas"]:
                 t += 1
-                answers = list(set([e["text"] for e in q["answers"]]))
+                answers = list({e["text"] for e in q["answers"]})
                 query = unicodedata.normalize("NFKD", q["query"].strip())
                 key = (passage, query)
                 if key in self.test_query2labels:
@@ -149,7 +148,7 @@ class ReCoRDDecomp(Decomposition):
             passage = unicodedata.normalize("NFKD", passage)
             for q in ex["qas"]:
                 t2 += 1
-                answers = list(set([e["text"] for e in q["answers"]]))
+                answers = list({e["text"] for e in q["answers"]})
                 query = unicodedata.normalize("NFKD", q["query"].strip())
                 key = (passage, query)
                 if key in self.train_query2labels:
@@ -238,9 +237,7 @@ class ReCoRDDecomp(Decomposition):
             prompt_suffix = prompt(boost_ex)
 
         left, right = query.split("@placeholder")
-        clean_choices = []
-        for choice in answer_choices:
-            clean_choices.append(f"{choice}{right}")
+        clean_choices = [f"{choice}{right}" for choice in answer_choices]
         #     other_choices = [c for c in answer_choices if c != choice]
         #     if not any(c for c in other_choices if choice.lower() in c.lower()):
         #         clean_choices.append(query.replace("@placeholder", choice))
@@ -263,7 +260,7 @@ class ReCoRDDecomp(Decomposition):
             answers.append((raw_answer, score))
         answers = sorted(answers, key=lambda x: x[1], reverse=True)
         final_answer = answers[0][0].strip()
-           
+
         return final_answer, pmp
 
 
@@ -274,10 +271,10 @@ class ReCoRDDecomp(Decomposition):
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=1000, is_train=True)
         # Do WS
         preds = self.merge_boosted_preds(all_boost_preds, all_boost_train_preds, train_labels, expt_log, expt_log_train)
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(evaluate(labels, [p[i] for p in all_boost_preds])["exact_match"])
+        individual_accuracies = [
+            evaluate(labels, [p[i] for p in all_boost_preds])["exact_match"]
+            for i in range(len(all_boost_preds[0]))
+        ]
         report = evaluate(labels, preds)
         return expt_log, expt_log_train, report["exact_match"], individual_accuracies
 
@@ -286,7 +283,7 @@ class ReCoRDDecomp(Decomposition):
         all_boost_preds = []
         all_boost_answers = []
         labels = []
-        label_data = self.test_query2labels if not is_train else self.train_query2labels
+        label_data = self.train_query2labels if is_train else self.test_query2labels
 
         for i, (ind, row) in tqdm(
             enumerate(test_data.iterrows()), total=len(test_data)
@@ -295,10 +292,7 @@ class ReCoRDDecomp(Decomposition):
             query = text.split("\n")[-1]
             passage = text.rsplit("\n", 1)[0]
             key = (passage, query.strip())
-            if key in label_data:
-                golds = label_data[key]
-            else:
-                golds = [row['targets_pretokenized']]
+            golds = label_data[key] if key in label_data else [row['targets_pretokenized']]
             answer_choices = row['answer_choices']
 
             if i == run_limit:
@@ -308,19 +302,17 @@ class ReCoRDDecomp(Decomposition):
             preds_across_boost = []
             answers_across_boost= []
             for boost_num, boost_examples in enumerate(boost_dfs):
-                all_prompts = []
                 if "@highlight" not in boost_examples[0]:
                     text = text.replace(query, "").strip().replace("@highlight", "").replace("\n\n", ". ")
-                
+
                 final_answer, prompt = self.get_final_answer_full_sentence(answer_choices, cloze_completion, boost_examples[0], text, query, manifest)
 
                 if i == 0:
                     print(prompt)
-                all_prompts.append(prompt)
-
+                all_prompts = [prompt]
                 pred = final_answer
 
-                answers_across_boost.append(final_answer)
+                answers_across_boost.append(pred)
                 prompts_across_boost.append(all_prompts)
                 preds_across_boost.append(pred)
 

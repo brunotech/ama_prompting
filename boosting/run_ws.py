@@ -17,19 +17,18 @@ def get_args():
     parser.add_argument("--model_prefix", type=str, default="EleutherAI_gpt-j-6B")
     parser.add_argument("--override_date", type=str, default=None)
 
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 def get_data(task_name, data_dir, model_prefix, override_date=None):
     """
     Load in dataset from task_name depending on where files are saved.
     """       
     task_dir = os.path.join(data_dir, task_name)
-    date = datetime.datetime.today().strftime("%m%d%Y") if not override_date else override_date
+    date = override_date or datetime.datetime.now().strftime("%m%d%Y")
     print(f"Loading runs from {date}")
     dpath = os.path.join(task_dir, f"{model_prefix}_decomposed_{date}.json")
     train_dpath = os.path.join(task_dir, f"{model_prefix}_decomposed_{date}_train.json")
-    
+
     print(dpath)
     print(train_dpath)
 
@@ -58,7 +57,7 @@ def get_data(task_name, data_dir, model_prefix, override_date=None):
         label_name_to_int = {"2": 1, "1": 0}
     elif task_name in ["anli_r1", "anli_r2", "anli_r3"]:
         label_name_to_int = {"true": 1, "false": 0, "neither": 2}
-    elif task_name == "MR" or task_name == "mr":
+    elif task_name in ["MR", "mr"]:
         label_name_to_int = {"positive": 1, "negative": 0}
     elif task_name == "multirc":
         label_name_to_int = {"yes": 1, "no": 0}
@@ -99,7 +98,7 @@ def get_data(task_name, data_dir, model_prefix, override_date=None):
 
     test_votes = test_votes.astype(int)
     test_gold = test_gold.astype(int)
-    
+
     train_votes = np.zeros((n_train, m))
     train_gold = np.zeros(n_train)
     for i in range(n_train):
@@ -245,7 +244,7 @@ def main():
         print("H(Y | WS output):")
         print(agg.conditional_entropy_singleton(lm_probs, test_gold))
     except:
-        print(f"Failed to produce conditional entropy value: H(Y | WS output).")
+        print("Failed to produce conditional entropy value: H(Y | WS output).")
 
 
 

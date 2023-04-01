@@ -369,10 +369,7 @@ class RTEDecomp(Decomposition):
                     for a in answer
                     if any(l.lower() in a.lower() for l in labels_names)
                 ]
-                if answer:
-                    answer = answer[0]
-                else:
-                    answer = ""
+                answer = answer[0] if answer else ""
                 answer = "".join(
                     [a for a in answer if a not in [".", ",", "?", ";", ":", "'", '"']]
                 )
@@ -380,9 +377,7 @@ class RTEDecomp(Decomposition):
                 is_no = "false" in answer.split()
                 if is_yes and (not is_no):
                     pred = "True"
-                if is_no and (not is_yes):
-                    pred = "False"
-                elif not is_no and not is_yes:
+                if is_no and not is_yes or not is_no and not is_yes:
                     pred = "False"
                 entry = {
                     "ind": ind,
@@ -433,10 +428,7 @@ class RTEDecomp(Decomposition):
         )
         answer = answer.replace(",", "").replace(".", "").replace("?", "")
         answer = [a for a in answer.split("\n") if a]
-        if answer:
-            answer = answer[0]
-        else:
-            answer = passage
+        answer = answer[0] if answer else passage
         return answer, qa_prompt
 
     def resolve_pred(self, answer, open_answer):
@@ -481,15 +473,15 @@ class RTEDecomp(Decomposition):
             manifest, 
             max_toks = len(question.split())*4
         )
-        chopped_answer = chopped_answer.split("\n")[0]  
+        chopped_answer = chopped_answer.split("\n")[0]
         chopped_list = chopped_answer.split()
         question = question.split()
         cuttoff = [t for t in question if t not in chopped_list]
-            
+
         cuttoff_str = " ".join(cuttoff).strip(".")
         chopped_list_str = " ".join(chopped_list).strip(".")
         if not cuttoff or chopped_list_str.endswith(cuttoff_str):
-            chopped_list = question[0:-cuttoff_size]
+            chopped_list = question[:-cuttoff_size]
             cuttoff = question[-cuttoff_size:]
         cuttoff = " ".join(cuttoff)
         chopped_answer = " ".join(chopped_list)
@@ -498,13 +490,13 @@ class RTEDecomp(Decomposition):
 
     def get_final_selection(self, choices_answer, passage, chopped_answer, prompt, boost_ex, manifest, selector_prompt=''):
         prompt_suffix = prompt(boost_ex)
-        select_choice_str = ""
         gold_choice = choices_answer[-1]
         other_choices = choices_answer[:-1]
-        for num, ch in enumerate(choices_answer):
-            select_choice_str += f"\n{num+1}. {ch}"
+        select_choice_str = "".join(
+            f"\n{num + 1}. {ch}" for num, ch in enumerate(choices_answer)
+        )
         prompt = f"{prompt_suffix}\n\n----\n\nSelect one Choice:{{choices_str:}}\n\nPassage: {{passage:}}\nThe passage \"Passage\" states: {{chopped_answer:}} \"Choice\": "
-        
+
         select_answer = get_response(
             prompt.format(choices_str=select_choice_str, passage=passage, chopped_answer=chopped_answer), 
             manifest, 
@@ -512,11 +504,8 @@ class RTEDecomp(Decomposition):
         )
         select_answer = select_answer.lower()
         select_answer = select_answer.split("\n")[0].strip(".")
-        
-        if select_answer.lower() in gold_choice.lower():
-            answer = "True"
-        else:
-            answer = "False"
+
+        answer = "True" if select_answer.lower() in gold_choice.lower() else "False"
         return answer, prompt
 
     def run_decomposed_prompt(
@@ -526,11 +515,13 @@ class RTEDecomp(Decomposition):
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=1000)
         # Do WS
         preds = self.merge_boosted_preds(all_boost_preds, all_boost_train_preds, train_labels, expt_log, expt_log_train)
-        
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(classification_report(labels, [p[i] for p in all_boost_preds], output_dict=True)["accuracy"])
+
+        individual_accuracies = [
+            classification_report(
+                labels, [p[i] for p in all_boost_preds], output_dict=True
+            )["accuracy"]
+            for i in range(len(all_boost_preds[0]))
+        ]
         report = classification_report(labels, preds, output_dict=True)
         return expt_log, expt_log_train, report["accuracy"], individual_accuracies 
 
@@ -569,9 +560,7 @@ class RTEDecomp(Decomposition):
                     if i == 0:
                         print("\nPROMPT:")
                         print(answer_final_prompt)
-                    all_prompts.append(question_final_prompt)
-                    all_prompts.append(answer_final_prompt)
-
+                    all_prompts.extend((question_final_prompt, answer_final_prompt))
                     open_answer = open_answer.replace("-", "")
                     open_answer = " ".join([a for a in open_answer.split() if a not in stops])
                     if proposed_answer:

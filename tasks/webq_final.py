@@ -224,7 +224,7 @@ class WebQDecomp(Decomposition):
     ):
         expt_log, all_boost_preds, labels = self._run_decomp_single_data(test_data, boost_dfs, manifest, overwrite_manifest)
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=1000)
-        
+
         # Do WS
         boost_test, boost_train = [], []
         for p in all_boost_preds:
@@ -235,13 +235,14 @@ class WebQDecomp(Decomposition):
             boost_train.append(samples)
 
         preds = self.merge_boosted_preds(boost_test, boost_train, train_labels, expt_log, expt_log_train)
-        preds = [(x,y) for x,y in zip([p[0][0] for p in all_boost_preds], preds)]
+        preds = list(zip([p[0][0] for p in all_boost_preds], preds))
 
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(accuracy_span_overlap(preds=[p[i] for p in all_boost_preds], golds=labels))
-
+        individual_accuracies = [
+            accuracy_span_overlap(
+                preds=[p[i] for p in all_boost_preds], golds=labels
+            )
+            for i in range(len(all_boost_preds[0]))
+        ]
         metric = accuracy_span_overlap(preds=preds, golds=labels)
         return expt_log, expt_log_train, metric, individual_accuracies
 
@@ -281,7 +282,6 @@ class WebQDecomp(Decomposition):
 
 
             for boost_examples in boost_dfs:
-                all_prompts = []
                 prompt_suffix = answer(boost_examples[1])
                 prompt = (
                     prompt_suffix + "\n\nContext: {text:}\nQuestion: {question:}\nAnswer:"
@@ -289,7 +289,7 @@ class WebQDecomp(Decomposition):
                 if i == 0:
                     print(prompt.format(text=more_info_answer, question=question))
 
-                all_prompts.append(prompt.format(text=more_info_answer, question=question))
+                all_prompts = [prompt.format(text=more_info_answer, question=question)]
                 raw_answer = get_response(
                     prompt.format(text=more_info_answer, question=question),
                     manifest,
@@ -300,7 +300,7 @@ class WebQDecomp(Decomposition):
                 pred = raw_answer.split("\n")[0].strip().lower()
                 prompts_across_boost.append(all_prompts)
                 preds_across_boost.append((more_info_answer, pred))
-            
+
             entry = {
                 "ind": ind,
                 "example": question,

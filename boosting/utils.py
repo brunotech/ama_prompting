@@ -27,16 +27,15 @@ def get_probabilties(num_lfs, num_examples, predictions, label_name_to_int):
             1: pos_indices
         }
 
-        # [i, j, k] = Pr(prompt_i = j| y = k)
-        # Accuracies
-        lf_accuracies = []
-        for i in range(num_lfs):
-            lf_accuracies.append(np.sum(golds  == np.array(lf_array[i]))/num_examples)
+        lf_accuracies = [
+            np.sum(golds == np.array(lf_array[i])) / num_examples
+            for i in range(num_lfs)
+        ]
         print(f"LF Accs: {lf_accuracies}")
 
         # [i, j, k] = Pr(prompt_i = j| y = k)
         classes = label_name_to_int.values()
-        accs = np.zeros((num_lfs, len(classes), len(classes))) 
+        accs = np.zeros((num_lfs, len(classes), len(classes)))
         for p in range(num_lfs):
             for i in classes:
                 for j in classes:
@@ -62,7 +61,7 @@ def get_probabilties(num_lfs, num_examples, predictions, label_name_to_int):
             sub_golds = golds[neg_indices]
             neg_probs.append(np.sum(sub_golds  == np.array(sub_preds))/len(neg_indices))
         print(f"Neg Probs: {neg_probs}\n\n") 
-        
+
         return lf_accuracies, accs, pos_probs, neg_probs, golds, indices
     
     
@@ -88,28 +87,28 @@ def get_probs(votes, indices_train, golds_train, acc_train, num_lfs_test):
 
 
 def get_nb_accuracy(num_examples_test, num_lfs_test, predictions_test, label_name_to_int, golds_test, indices_train, golds_train, accs_train):
-    output = np.zeros(num_examples_test) 
-    errors = 0
-    for i, (k, item) in enumerate(predictions_test.items()):
-        votes = item['chosen_answers_lst']
-        votes_mapped = []
-        for v in votes:
-            if v in label_name_to_int:
-                votes_mapped.append(label_name_to_int[v])
-            else:
-                votes_mapped.append(0)
-        votes = votes_mapped.copy()
-        probs =  np.round(get_probs(votes, indices_train, golds_train, accs_train, num_lfs_test))
-        output[i] = probs
+        output = np.zeros(num_examples_test)
+        errors = 0
+        for i, (k, item) in enumerate(predictions_test.items()):
+                votes = item['chosen_answers_lst']
+                votes_mapped = []
+                for v in votes:
+                    if v in label_name_to_int:
+                        votes_mapped.append(label_name_to_int[v])
+                    else:
+                        votes_mapped.append(0)
+                votes = votes_mapped.copy()
+                probs =  np.round(get_probs(votes, indices_train, golds_train, accs_train, num_lfs_test))
+                output[i] = probs
 
-        # Mean squared error
-        g = golds_test[i]
-        if golds_test[i] == -1:
-            g = 0
-        error = np.abs(output[i] - g)**2
-        errors += error
-    accuracy = 1 - (errors / num_examples_test)
-    return accuracy, output
+                # Mean squared error
+                g = golds_test[i]
+                if g == -1:
+                        g = 0
+                error = np.abs(output[i] - g)**2
+                errors += error
+        accuracy = 1 - (errors / num_examples_test)
+        return accuracy, output
 
 
 def estimate_matrix(m, n, L):
@@ -153,15 +152,12 @@ def get_vote_vectors(num_samples, num_lfs, predictions, label_name_to_int):
     return vectors, vectors_no_y, labels_vector
 
 def get_feature_vector(vote_vectors, include_pairwise=False, include_singletons=True):
-    feature_vectors = []
-    for votes in vote_vectors:
-        if include_singletons:
-            feature_vector = list(votes[:])
-        else:
-            feature_vector = []
-        if include_pairwise:
-            for subset in itertools.combinations(votes[:], 2):
-                feature_vector.append(subset[0] * subset[1])
-        feature_vectors.append(feature_vector)
-    X = np.matrix(feature_vectors)
-    return X
+        feature_vectors = []
+        for votes in vote_vectors:
+                feature_vector = list(votes[:]) if include_singletons else []
+                if include_pairwise:
+                        feature_vector.extend(
+                            subset[0] * subset[1]
+                            for subset in itertools.combinations(votes[:], 2))
+                feature_vectors.append(feature_vector)
+        return np.matrix(feature_vectors)

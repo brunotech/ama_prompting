@@ -361,17 +361,16 @@ class StoryCloze(Decomposition):
                 what_next_examples[boost_id],
                 sentiment_more_positive_examples[0]
             ]
-        else:
-            seed = [1, 2, 3][boost_id-3]
-            k_shot = 8  #32#4
-            random.seed(seed)
-            np.random.seed(seed)
-            sub_df = data_train.sample(k_shot)
-            booster_df = sub_df.sample(frac=1, random_state=0)
-            print(f"Selected: {len(booster_df)} in context examples.")
-            return [
-                booster_df
-            ]
+        seed = [1, 2, 3][boost_id-3]
+        k_shot = 8  #32#4
+        random.seed(seed)
+        np.random.seed(seed)
+        sub_df = data_train.sample(k_shot)
+        booster_df = sub_df.sample(frac=1, random_state=0)
+        print(f"Selected: {len(booster_df)} in context examples.")
+        return [
+            booster_df
+        ]
 
     def zero_few_baseline(
         self,
@@ -404,7 +403,7 @@ class StoryCloze(Decomposition):
                             answer = s_row['sentence_quiz2']
                         choices = f"A) {s_row['sentence_quiz1']}\nB) {s_row['sentence_quiz2']}\n\n"
                         icl_str += f"{s_text}{choices}Answer: {answer}\n\n\n"
-                
+
                 text = f"{row['input_sentence_1']} {row['input_sentence_2']} {row['input_sentence_3']} {row['input_sentence_4']}\n\n"
                 choices = f"A) {row['sentence_quiz1']}\nB) {row['sentence_quiz2']}\n\n"
                 gold = ''
@@ -414,17 +413,13 @@ class StoryCloze(Decomposition):
                     gold = row['sentence_quiz2']
                 prompt = f"{instruction}\n\n\n{icl_str}{text}{choices}Answer: "
 
-                raw_answer = get_response(prompt, manifest, max_toks=50) 
+                raw_answer = get_response(prompt, manifest, max_toks=50)
                 answer = raw_answer.split("\n")
                 answer = [a for a in answer if a]
-                if answer:
-                    answer = answer[0].replace("Answer: ", "").strip()
-                else:
-                    answer = ''
-
+                answer = answer[0].replace("Answer: ", "").strip() if answer else ''
                 if i == 0:
                     print(prompt)
-                
+
                 answer = answer.replace(")", "").replace("(", "").replace(":", "")
                 is_A = answer.lower() in row['sentence_quiz1'].lower() or row['sentence_quiz1'].lower() in answer.lower() or "A" in answer.split()
                 is_B = answer.lower() in row['sentence_quiz2'].lower() or row['sentence_quiz2'].lower() in answer.lower() or "B" in answer.split()
@@ -460,10 +455,7 @@ class StoryCloze(Decomposition):
             max_toks= 4*len(statement.split()))
         question = question.replace("Question: ", "")
         question = [q for q in question.split("\n") if q]
-        if not question:
-            question = f"{statement} Yes or no?"
-        else:
-            question = question[0]
+        question = question[0] if question else f"{statement} Yes or no?"
         return question, question_prompt
 
     def answer_question(self, question, passage, all_prompts, boost_examples, manifest, overwrite_manifest, option=1):
@@ -476,21 +468,26 @@ class StoryCloze(Decomposition):
             max_toks=50)
         answer = answer.replace("Answer: ", "")
         answer = [a for a in answer.split("\n") if a]
-        if answer:
-            answer = answer[0].replace(",", "").replace(".", "").lower()
-        else:
-            answer = ''
+        answer = answer[0].replace(",", "").replace(".", "").lower() if answer else ''
         pred = ''
-        if option == 1:
-            if 'yes' in answer.split():
-                pred = "1"
-            elif 'no' in answer.split():
-                pred = "2"
-        elif option == 2:
-            if 'no' in answer.split():
-                pred = "1"
-            elif 'yes' in answer.split():
-                pred = "2"
+        if (
+            option == 1
+            and 'yes' in answer.split()
+            or option != 1
+            and option == 2
+            and 'no' in answer.split()
+        ):
+            pred = "1"
+        elif (
+            option == 1
+            and 'yes' not in answer.split()
+            and 'no' in answer.split()
+            or option != 1
+            and option == 2
+            and 'no' not in answer.split()
+            and 'yes' in answer.split()
+        ):
+            pred = "2"
         return pred, answer_prompt
 
     def get_one_by_one(self, example, choice_a, choice_b, all_prompts, boost_examples, manifest, overwrite_manifest):
@@ -502,7 +499,7 @@ class StoryCloze(Decomposition):
         # ask questions
         pred_a, answerer_prompt = self.answer_question(question_a, example, all_prompts, boost_examples, manifest, overwrite_manifest, option=1)
         pred_b, answerer_prompt = self.answer_question(question_b, example, all_prompts, boost_examples, manifest, overwrite_manifest, option=2)
-        
+
         # reconcile answer
         if pred_a == "1" and pred_b == "1":
             pred = "1"
@@ -510,8 +507,6 @@ class StoryCloze(Decomposition):
             pred = "2"
         elif pred_a and not pred_b:
             pred = pred_a
-        elif not pred_b and pred_b:
-            pred = pred_b
         else:
             pred = ''
         return pred, questioner_prompt, answerer_prompt
@@ -542,9 +537,9 @@ class StoryCloze(Decomposition):
             manifest,
             max_toks=20)
         raw_answer = raw_answer.split("\n")[0].lower()
-        if choice_a.lower() in raw_answer and not choice_b.lower() in raw_answer:
+        if choice_a.lower() in raw_answer and choice_b.lower() not in raw_answer:
             return 1
-        elif choice_b.lower() in raw_answer and not choice_a.lower() in raw_answer:
+        elif choice_b.lower() in raw_answer and choice_a.lower() not in raw_answer:
             return 2
         else:
             return 0
@@ -591,12 +586,14 @@ class StoryCloze(Decomposition):
         expt_log, all_boost_preds, labels = self._run_decomp_single_data(test_data, boost_dfs, manifest, overwrite_manifest, run_limit=-1)
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=1000)
         # Do WS
-        
+
         preds = self.merge_boosted_preds(all_boost_preds, all_boost_train_preds, train_labels, expt_log, expt_log_train)
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(classification_report(labels, [p[i] for p in all_boost_preds], output_dict=True)["accuracy"])
+        individual_accuracies = [
+            classification_report(
+                labels, [p[i] for p in all_boost_preds], output_dict=True
+            )["accuracy"]
+            for i in range(len(all_boost_preds[0]))
+        ]
         report = classification_report(labels, preds, output_dict=True)
         return expt_log, expt_log_train, report["accuracy"], individual_accuracies
 
@@ -632,9 +629,7 @@ class StoryCloze(Decomposition):
                         print("\n\n")
                         print(answerer_prompt)
                         print("\n\n")
-                    all_prompts.append(questioner_prompt)
-                    all_prompts.append(answerer_prompt)
-
+                    all_prompts.extend((questioner_prompt, answerer_prompt))
                     if not pred:
                         pred, sentiment_prompt = self.combine_sentiments(
                             example, choice_a, choice_b, [sentiment, sentiment_more_positive], boost_examples, manifest, boost_num, overwrite_manifest
@@ -664,7 +659,7 @@ class StoryCloze(Decomposition):
                         elif s_row['answer_right_ending'] == 2:
                             answer = s_row['sentence_quiz2']
                         icl_str += f"Context: {s_text} {answer}\n\n"
-                    
+
                     text = f"{row['input_sentence_1']} {row['input_sentence_2']} {row['input_sentence_3']} {row['input_sentence_4']}"
                     options = [row['sentence_quiz1'], row['sentence_quiz2']]
                     if row['answer_right_ending'] == 1:
@@ -682,7 +677,7 @@ class StoryCloze(Decomposition):
                         overwrite=bool(overwrite_manifest),
                         max_toks=max(len(opt) for opt in options)*4,
                     )
-                    
+
                     answer = raw_answer
                     is_A = answer.lower() in row['sentence_quiz1'].lower() or row['sentence_quiz1'].lower() in answer.lower() or "A" in answer.split()
                     is_B = answer.lower() in row['sentence_quiz2'].lower() or row['sentence_quiz2'].lower() in answer.lower() or "B" in answer.split()

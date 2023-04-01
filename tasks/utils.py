@@ -25,20 +25,18 @@ class InputOutputPrompt:
         self.instruction = instruction
 
     def __call__(self, input_output_pairs: pd.DataFrame):
-        examples = []
-        for _, example in input_output_pairs.iterrows():
-            examples.append(f"{self.input_formatter(example)}{self.input_output_sep}{self.output_formatter(example)}")
-        if examples:
+        if examples := [
+            f"{self.input_formatter(example)}{self.input_output_sep}{self.output_formatter(example)}"
+            for _, example in input_output_pairs.iterrows()
+        ]:
             input_str = self.example_sep.join(examples)
-            res = f"{self.instruction}{input_str}"
+            return f"{self.instruction}{input_str}"
         else:
-            res = f"{self.instruction}".rstrip()
-        return res
+            return f"{self.instruction}".rstrip()
     
     def __repr__(self):
         dummy_ex = pd.DataFrame([{k: f"<{k.upper()}>" for k in self.required_keys}])
-        st = self(dummy_ex)
-        return st
+        return self(dummy_ex)
 
 
 def prefix_formatter(ex_keys: List[str], prefix: str, error_on_empty: bool = True) -> str:
@@ -119,9 +117,7 @@ def get_response(
     if verbose:
         print("\n***Prompt***\n", prompt)
         print("\n***Response***\n", response)
-    if log_prob:
-        return response, log_prob
-    return response
+    return (response, log_prob) if log_prob else response
 
 def load_hf_data(save_dir, task_name, val_split, hf_name, overwrite_data):
     save_data = Path(f"{save_dir}/{task_name}/data.feather")
@@ -176,8 +172,7 @@ def text_f1(preds, golds):
             recall = 1.0 * num_same / len(gold_toks)
             f1 = (2 * precision * recall) / (precision + recall)
             total_f1 += f1
-    f1_avg = total_f1 / len(golds)
-    return f1_avg
+    return total_f1 / len(golds)
 
 def accuracy_span_overlap(preds, golds):
     correct = 0
@@ -189,10 +184,9 @@ def accuracy_span_overlap(preds, golds):
                     if p.lower() in g.lower():
                         found = True
                         break
-                else:
-                    if  g.lower() in p.lower():
-                        found = True
-                        break
+                elif g.lower() in p.lower():
+                    found = True
+                    break
         if found: correct += 1
     return correct / len(preds)
 

@@ -159,17 +159,15 @@ class Aggregator():
         """
         Creates a data structure c_data which maps cliques and separator sets to their maximal clique.
         """
-        self.c_data = dict()
+        self.c_data = {}
         for i in range(self.m):
             self.c_data[i] = {
                 "vertices": [i],
-                "max_cliques": set( # which max clique i belongs to
-                    [
-                        j
-                        for j in self.c_tree.nodes()
-                        if i in self.c_tree.nodes[j]["members"]
-                    ]
-                ),
+                "max_cliques": {
+                    j
+                    for j in self.c_tree.nodes()
+                    if i in self.c_tree.nodes[j]["members"]
+                },
             }
 
         # Get the higher-order clique statistics based on the clique tree
@@ -195,7 +193,7 @@ class Aggregator():
                     #idx = counter + m
                     self.c_data[tuple(members)] = {
                         "vertices": members,
-                        "max_cliques": set([item]) if C_type == "node" else set(item),
+                        "max_cliques": {item} if C_type == "node" else set(item),
                     }
                     counter += 1
 
@@ -413,14 +411,10 @@ class Aggregator():
             n = self.n_test 
 
 
-        l = len(idxs) 
+        l = len(idxs)
         e_y = 2*self.balance[1] - 1
         vote_moment = votes[:, idxs].prod(axis=1).mean()
-        if l % 2 == 0:
-            # E[Y] * E[lfs] = E[lfs Y]
-            acc = vote_moment * e_y
-        else:
-            acc = vote_moment / e_y
+        acc = vote_moment * e_y if l % 2 == 0 else vote_moment / e_y
 
 
 
@@ -450,7 +444,7 @@ class Aggregator():
                 else:
                     # print(f"multiplying by accuracy Pr(vote_{p} = {votes[p]} | y = {y}): {accs[p, y, votes[p]]}")
                     prod *= accs[p, y, votes[p]] # this assumes everything is independent
-        
+
         else:
             # multiply over maximal cliques
             for i in self.c_tree.nodes():
@@ -474,7 +468,7 @@ class Aggregator():
                     #print(f"multiplying by prob over clique {members}: {self.get_clique_probs(members, votes[members], y, symmetric)}")
                     prod *= self.get_clique_probs(members, votes[members], y, symmetric)
 
-            # divide over separator sets      
+            # divide over separator sets
             for i in self.c_tree.edges():
                 edge = self.c_tree.edges[i]
                 members = list(edge['members'])
@@ -484,19 +478,18 @@ class Aggregator():
                     if self.abstains and votes[v] == self.abstain_value:
                         if abstains_symmetric:
                             prod /= (1 - self.coverage[v])**(deg - 1)
+                        elif self.abstain_rate[v, y] == 0:
+                            prod /= 0.000001**(deg - 1) # edge cas
                         else:
-                            if self.abstain_rate[v, y] == 0:
-                                prod /= 0.000001**(deg - 1) # edge cas
-                            else:
-                                prod /= self.abstain_rate[v, y]**(deg - 1)
+                            prod /= self.abstain_rate[v, y]**(deg - 1)
                     else:
                         #print(f"Dividing by symmetric accuracy of {v}")
-                        prod /= accs[v, y, votes[v]]**(deg - 1) 
+                        prod /= accs[v, y, votes[v]]**(deg - 1)
                 else:
                     #print(f"Dividing by prob over clique {members}: {self.get_clique_probs(members, votes[members], y, symmetric)}")
                     deg = len(self.c_data[tuple(members)]['max_cliques'])
                     prod /= (self.get_clique_probs(members, votes[members], y, symmetric))**(deg-1)
-                            
+
         return prod 
 
     def get_probs(self, votes, accs, edgeset = None, symmetric=False, abstains_symmetric = True):
@@ -535,9 +528,8 @@ class Aggregator():
 
         if symmetric:
             accs = self.sym_accs
-        else:
-            if accs is None:
-                accs = self.nb_accs
+        elif accs is None:
+            accs = self.nb_accs
 
         for votes in self.test_votes:
             prob = self.get_probs(votes, accs, symmetric=symmetric, abstains_symmetric=abstains_symmetric)
@@ -569,21 +561,17 @@ class Aggregator():
         preds = []
         probs = []
 
-        if data=='val':
-            votes = self.val_votes 
+        if data == 'test':
+            votes = self.test_votes
+            gold = self.test_gold
+        elif data == 'val':
+            votes = self.val_votes
             gold = self.val_gold
-        elif data=='test':
-            votes = self.test_votes 
-            gold = self.test_gold 
         else:
-            votes = self.train_votes 
+            votes = self.train_votes
             gold = self.train_gold 
 
-        if symmetric:
-            accs = self.sym_accs
-        else:
-            accs = self.nb_accs
-
+        accs = self.sym_accs if symmetric else self.nb_accs
         for v in votes:
             prob = self.get_probs(v, accs, edgeset, symmetric=False, abstains_symmetric= abstains_symmetric)
             probs.append(prob)
@@ -611,12 +599,12 @@ class Aggregator():
         #print("Votes 1")
         #print(votes)
 
-        for i, vote in enumerate(votes):
+        for vote in votes:
             # compute Pr(y | lf) for all y. We are treating this estimated probability as the true distribution.
             prob_vector = self.get_probs(vote, self.nb_test_accs, edgeset, symmetric=False, abstains_symmetric=True)
 
             # print(prob_vector, vote, i)
-            
+
             # print(prob_vector, vote)
             for j in range(self.k):
                 if prob_vector[j] == 0:
@@ -723,11 +711,18 @@ class Aggregator():
         self._set_clique_tree(edgeset)
         self._set_clique_data()
 
-        for i, vote in enumerate(votes):
-            # compute Pr(votes, y)
-            prob = 0
-            for c in self.classes:
-                prob+= self.get_cond_probs(vote, c, self.nb_accs, edgeset, symmetric=False, abstains_symmetric=True)
+        for vote in votes:
+            prob = sum(
+                self.get_cond_probs(
+                    vote,
+                    c,
+                    self.nb_accs,
+                    edgeset,
+                    symmetric=False,
+                    abstains_symmetric=True,
+                )
+                for c in self.classes
+            )
             ce += np.log(prob)
 
         return -ce/len(votes)
@@ -813,19 +808,18 @@ class Aggregator():
         beta = torch.tensor(self.coverage, requires_grad = False).type(torch.FloatTensor) # we do not optimize beta for now
         optimizer = torch.optim.SGD([alpha], lr=lr)
 
-        for t in range(epochs):
+        for _ in range(epochs):
             optimizer.zero_grad()
 
             mu_1 = torch.prod((x == 1) * beta.multiply(alpha) + (x == -1) * beta.multiply(1 - alpha) + (x == 0) * (1 - beta), dim = 1)
             mu_neg1 = torch.prod((x == -1) * beta.multiply(alpha) + (x == 1) * beta.multiply(1 - alpha) + (x == 0) * (1 - beta), dim=1)
 
-            if with_label:
-                # use the label information in MLE 
-                snorkel_loss = -torch.log(mu_1[np.where(gold == 1)[0]]).sum() - torch.log(mu_neg1[np.where(gold == -1)[0]]).sum()
-            else:
-                # 50-50 for y = 1 vs -1
-                snorkel_loss = -torch.log(0.5*mu_1 + 0.5*mu_neg1).sum()
-    
+            snorkel_loss = (
+                -torch.log(mu_1[np.where(gold == 1)[0]]).sum()
+                - torch.log(mu_neg1[np.where(gold == -1)[0]]).sum()
+                if with_label
+                else -torch.log(0.5 * mu_1 + 0.5 * mu_neg1).sum()
+            )
             snorkel_loss.backward()
             optimizer.step()
 
@@ -836,7 +830,7 @@ class Aggregator():
             with torch.no_grad():
                 alpha.clamp_(0.5, 1) # assume that accuracy is better than random
                 beta.clamp_(0, 1) # coverage should be between 0 and 1
-                
+
         return alpha, beta
 
     def data_programming(self, with_label=False, seed=0, lr = 0.0001, epochs=1000):

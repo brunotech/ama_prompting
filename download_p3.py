@@ -48,7 +48,7 @@ def extract_dataset(data_path, subfolder, sizes, processes=10, splits=SPLITS):
             continue
         features_dict = json.load(open(data_path / subfolder / f"info.{split}.json"))
         if "features" not in features_dict:
-            features_dict = json.load(open(data_path / subfolder / f"info.train.json"))
+            features_dict = json.load(open(data_path / subfolder / "info.train.json"))
         if "features" not in features_dict:
             continue
         features_dict = features_dict["features"]
@@ -69,11 +69,12 @@ def extract_dataset(data_path, subfolder, sizes, processes=10, splits=SPLITS):
         )
         res = []
         for ex in tqdm(ds.as_numpy_iterator(), total=sizes.get(split, 10000)):
-            ex_dict = {}
-            for feat_name, feat_value in ex.items():
-                ex_dict[feat_name] = _FEAT_MAPPING_FUNCTIONS[feat_name](feat_value)
+            ex_dict = {
+                feat_name: _FEAT_MAPPING_FUNCTIONS[feat_name](feat_value)
+                for feat_name, feat_value in ex.items()
+            }
             res.append(ex_dict)
-        if len(res) > 0:
+        if res:
             df = pd.DataFrame.from_records(res)
             datasets[split] = df
     return datasets
@@ -85,10 +86,11 @@ for subfolder in data_path.iterdir():
     subfolder = subfolder.name
     out_path = output_data_path / subfolder
     out_path.mkdir(parents=True, exist_ok=True)
-    splits_to_pass = []
-    for split in SPLITS:
-        if not (out_path / f"{split}.feather").exists():
-            splits_to_pass.append(split)
+    splits_to_pass = [
+        split
+        for split in SPLITS
+        if not (out_path / f"{split}.feather").exists()
+    ]
     datasets = extract_dataset(data_path, subfolder, sizes=DATA_SPLITS_SIZES[str(subfolder)], splits=splits_to_pass)
     for split, df in datasets.items():
         df.to_feather(out_path / f"{split}.feather")

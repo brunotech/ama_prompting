@@ -94,13 +94,9 @@ class Ising():
 
 
     def sample(self):
-        r = np.random.random_sample() 
+        r = np.random.random_sample()
         smaller = np.where(self.cdf < r)[0]
-        if len(smaller) == 0:
-            i = 0 
-        else: 
-            i = smaller.max() + 1
-
+        i = 0 if len(smaller) == 0 else smaller.max() + 1
         return self.support[i]
 
     def make_data(self, n, has_label = True):
@@ -124,10 +120,9 @@ def est_accs(m, vote, gold):
     gold_idxs = [np.where(gold == -1)[0], np.where(gold == 1)[0]]
 
     accs = np.zeros((m, 2, 2)) # [i, j, k] = Pr(prompt_i = j| y = k)
-    for p in range(m):
-        for i in classes:
-            for j in classes:
-                accs[p, i, j] = len(np.where(vote[gold_idxs[i], p] == 2*j-1)[0]) / len(gold_idxs[i])
+    for p, i in itertools.product(range(m), classes):
+        for j in classes:
+            accs[p, i, j] = len(np.where(vote[gold_idxs[i], p] == 2*j-1)[0]) / len(gold_idxs[i])
 
     return accs
 
@@ -147,17 +142,14 @@ def get_probs(m, votes, accs, balance):
     pos = get_cond_probs(m, votes, 1, accs, balance)
     neg = get_cond_probs(m, votes, 0, accs, balance)
 
-    if pos == 0:
-        return 0
-    else:
-        return pos / (pos + neg)
+    return 0 if pos == 0 else pos / (pos + neg)
 
 
 def pick_best_prompt(m, vote, gold, n):
     # overall accuracies Pr(lf_p = y) on test (we don't know these)
     overall_train_acc = np.zeros(m)
     for i in range(m):
-        overall_train_acc[i] = len(np.where((vote[:, i] == gold) == True)[0])/n
+        overall_train_acc[i] = len(np.where(vote[:, i] == gold)[0]) / n
 
     return overall_train_acc.argmax()
 
@@ -202,7 +194,7 @@ def main():
         if nb_output[i] != gold_test[i]:
             nb_err += 1
 
-    
+
         # note: play around with MV tie breaking strategy 
         if len(np.where(vote_test[i] == 1)[0]) >= m / 2:
             mv_output[i] = 1
@@ -220,7 +212,9 @@ def main():
 
     best_prompt = pick_best_prompt(m, vote_train, gold_train, n_train)
 
-    best_prompt_acc = len(np.where((vote_test[:, best_prompt] == gold_test) == True)[0]) / n_test
+    best_prompt_acc = (
+        len(np.where(vote_test[:, best_prompt] == gold_test)[0]) / n_test
+    )
 
     print(f"Naive bayes: {nb_acc}")
     print(f"Best prompt: {best_prompt_acc}")

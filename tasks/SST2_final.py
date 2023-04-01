@@ -44,8 +44,7 @@ class SST2Decomp(Decomposition):
             total_in_context += num_per_class
             if total_in_context == k_shot:
                 break
-        mini_df = pd.concat(dfs)
-        return mini_df
+        return pd.concat(dfs)
 
     def read_data(self, save_dir, overwrite_data):
         save_data = Path(f"{save_dir}/{self.task_name}/data.feather")
@@ -136,10 +135,7 @@ class SST2Decomp(Decomposition):
                 icl_str = ""
                 if do_few_shot:
                     for s_ind, s_row in few_shot_df.iterrows():
-                        if s_row["label"] == 0:
-                            demo_label = "negative"
-                        else:
-                            demo_label = "positive"
+                        demo_label = "negative" if s_row["label"] == 0 else "positive"
                         icl = f"Text: {s_row['sentence']}\nSentiment: {demo_label}"
                         icl_str += f"{icl}\n\n"
 
@@ -171,11 +167,7 @@ class SST2Decomp(Decomposition):
                 else:
                     pred = ""
 
-                if label == 1:
-                    gold_str = "positive"
-                else:
-                    gold_str = "negative"
-
+                gold_str = "positive" if label == 1 else "negative"
                 entry = {
                     "gold": gold_str,
                     "pred": pred,
@@ -198,10 +190,12 @@ class SST2Decomp(Decomposition):
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=1000)
         # Do WS
         preds = self.merge_boosted_preds(all_boost_preds, all_boost_train_preds, train_labels, expt_log, expt_log_train)
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(classification_report(labels, [p[i] for p in all_boost_preds], output_dict=True)["accuracy"])
+        individual_accuracies = [
+            classification_report(
+                labels, [p[i] for p in all_boost_preds], output_dict=True
+            )["accuracy"]
+            for i in range(len(all_boost_preds[0]))
+        ]
         report = classification_report(labels, preds, output_dict=True)
         return expt_log, expt_log_train, report["accuracy"], individual_accuracies
 
@@ -209,33 +203,29 @@ class SST2Decomp(Decomposition):
         expt_log = {}
         all_boost_preds = []
         labels = []
-        
+
         for i, (ind, row) in tqdm(
             enumerate(test_data.iterrows()), total=len(test_data)
         ):
             sentence = row["sentence"]
             label = row["label"]
-            
+
             if i == run_limit:
                 break
 
             prompts_across_boost = []
             preds_across_boost = []
+            description = "For each snippet of text, label the sentiment of the text as positive or negative."
             for boost_examples in boost_dfs:
-                all_prompts = []
                 icl_str = ""
                 for s_ind, s_row in boost_examples[0].iterrows():
-                    if s_row["label"] == 0:
-                        demo_label = "negative"
-                    else:
-                        demo_label = "positive"
+                    demo_label = "negative" if s_row["label"] == 0 else "positive"
                     icl = f"Text: {s_row['sentence']}\nSentiment: {demo_label}"
                     icl_str += f"{icl}\n\n"
 
-                description = "For each snippet of text, label the sentiment of the text as positive or negative."
                 prompt = f"{description}\n\n{icl_str}Text: {{sentence:}}\nSentiment:"
                 pmp = prompt.format(sentence=sentence)
-                all_prompts.append(pmp)
+                all_prompts = [pmp]
                 if i == 0:
                     print(pmp)
                 pred = get_response(
@@ -246,18 +236,11 @@ class SST2Decomp(Decomposition):
                 )
                 pred = pred.replace(".", "").replace(",", "").replace("Label: ", "")
                 pred = [p for p in pred.split("\n") if p]
-                if pred:
-                    pred = pred[0]
-                else:
-                    pred = ""
+                pred = pred[0] if pred else ""
                 prompts_across_boost.append(all_prompts)
                 preds_across_boost.append(pred)
 
-            if label == 1:
-                gold_str = "positive"
-            else:
-                gold_str = "negative"
-
+            gold_str = "positive" if label == 1 else "negative"
             entry = {
                 "gold": gold_str,
                 "prompts": prompts_across_boost,

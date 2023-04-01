@@ -228,11 +228,10 @@ class WICDecomp(Decomposition):
     ):
         synonym = all_constructors[0]
 
-        all_prompts = []
         # synonyms
         prompt_suffix = synonym(all_boost_exs[0])
         prompt_combined = f'{prompt_suffix}\n\nIn "{{sent:}}", synonyms for the word \"{{word:}}\" are: '
-        all_prompts.append(prompt_combined.format(sent=sent, word=word))
+        all_prompts = [prompt_combined.format(sent=sent, word=word)]
         synonyms = get_response(
             prompt_combined.format(sent=sent, word=word),
             manifest,
@@ -240,7 +239,7 @@ class WICDecomp(Decomposition):
             max_toks=10,
         )
         synonyms = synonyms.replace("- ", "").split("\n")
-        synonyms = ", ".join([a for a in synonyms if a][0:1])
+        synonyms = ", ".join([a for a in synonyms if a][:1])
 
         # generate sentences
         quoted_sent = sent.split()
@@ -250,11 +249,7 @@ class WICDecomp(Decomposition):
                 sent.append(f'"{tok}"')
             else:
                 sent.append(tok)
-        if sent:
-            sent = " ".join(sent)
-        else:
-            sent = " ".join(quoted_sent)
-
+        sent = " ".join(sent) if sent else " ".join(quoted_sent)
         combined_definition = f"{synonyms}"
         sentences = []
         return combined_definition, sentences, all_prompts
@@ -274,10 +269,7 @@ class WICDecomp(Decomposition):
         all_prompts = []
         # reconcile the result
         answer = ""
-        if def1.strip() != def2.strip():
-            answer = "No"
-        else:
-            answer = "Yes"
+        answer = "No" if def1.strip() != def2.strip() else "Yes"
         return answer, all_prompts
 
     def run_decomposed_prompt(
@@ -287,10 +279,12 @@ class WICDecomp(Decomposition):
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=1000)
         # Do WS
         preds = self.merge_boosted_preds(all_boost_preds, all_boost_train_preds, train_labels, expt_log, expt_log_train)
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(classification_report(labels, [p[i] for p in all_boost_preds], output_dict=True)["accuracy"])
+        individual_accuracies = [
+            classification_report(
+                labels, [p[i] for p in all_boost_preds], output_dict=True
+            )["accuracy"]
+            for i in range(len(all_boost_preds[0]))
+        ]
         report = classification_report(labels, preds, output_dict=True)
         return expt_log, expt_log_train, report["accuracy"], individual_accuracies
 

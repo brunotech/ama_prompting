@@ -38,8 +38,7 @@ def text_f1(preds=[], labels=[]):
             recall = 1.0 * num_same / len(gold_toks)
             f1 = (2 * precision * recall) / (precision + recall)
             total_f1 += f1
-    f1_avg = total_f1 / len(labels)
-    return f1_avg
+    return total_f1 / len(labels)
 
 def get_response(manifest, prompt, max_toks=10, temperature = 0, gold_choices=[], model_name="manifest", engine="text-davinci-002", logit_bias={}):
     prompt = prompt.strip()
@@ -49,12 +48,9 @@ def get_response(manifest, prompt, max_toks=10, temperature = 0, gold_choices=[]
         else:
             completion = openai.Completion.create(engine=engine, prompt=prompt, temperature=temperature, top_p=1, max_tokens=max_toks, logprobs=5)
         response = completion.choices[0].text
-    
+
     if model_name == "manifest":
-        if gold_choices:
-            max_len = max([len(g.split()) for g in gold_choices])
-        else:
-            max_len = 0
+        max_len = max(len(g.split()) for g in gold_choices) if gold_choices else 0
         max_token_args = ({"max_tokens": min(max_toks,8 * len(max_len),)}
             if gold_choices is None
             else {}
@@ -63,7 +59,7 @@ def get_response(manifest, prompt, max_toks=10, temperature = 0, gold_choices=[]
             response = manifest.run(prompt, gold_choices=gold_choices,overwrite_cache=False,**max_token_args,)
         else:
             response = manifest.run(prompt, max_tokens=max_toks, overwrite_cache=False)
-        
+
     return response
 
 def get_manifest_session(
@@ -123,13 +119,13 @@ def selection_hard(dataset, manifest):
     for i, (ind, row) in tqdm(enumerate(dataset.items())):
         prefix = row['input']
         pred = get_response(manifest, prefix, max_toks=50)
-        pred = [p for p in pred.split("\n")][0]
+        pred = list(pred.split("\n"))[0]
         preds.append(pred)
-        
+
         if i == 0:
             print(prefix)
             print(f"PRED: {pred}")
-    
+
     valid = 0
     for (ind, row), pred in zip(dataset.items(), preds):
         choices = row['output']
@@ -146,17 +142,14 @@ def text_generation(dataset, manifest):
         pred = get_response(manifest, prefix, max_toks=50)
         pred = pred.split("\n\n")[0]
         pred = pred.split("\n")
-        pred = list(set([a.replace("- ", "").strip() for a in pred]))
+        pred = list({a.replace("- ", "").strip() for a in pred})
         preds.append(pred)
-        
+
         if i == 0:
             print(prefix)
             print(f"PRED: {pred}")
-        
-    valid = 0
-    for pred in preds:
-        if len(pred) == 2:
-            valid += 1
+
+    valid = sum(len(pred) == 2 for pred in preds)
     return valid/len(dataset)
 
 
@@ -166,16 +159,15 @@ def question_generation(dataset, manifest):
     for i, (ind, row) in tqdm(enumerate(dataset.items())):
         prefix = row['input']
         pred = get_response(manifest, prefix, max_toks=50)
-        pred = [p for p in pred.split("\n")][0]
+        pred = list(pred.split("\n"))[0]
         preds.append(pred)
-        
+
         if i == 0:
             print(prefix)
             print(f"PRED: {pred}")
-    
+
     outputs = [row['output'] for ind, row in dataset.items()]
-    score = rougeL(preds=preds, labels = outputs)
-    return score
+    return rougeL(preds=preds, labels = outputs)
 
 
 """  Does the model faithfully choose the sentence with the entity name? """
@@ -185,16 +177,15 @@ def extraction(dataset, manifest):
     for i, (ind, row) in tqdm(enumerate(dataset.items())):
         prefix = row['input']
         pred = get_response(manifest, prefix, max_toks=50)
-        pred = [p for p in pred.split("\n")][0]
+        pred = list(pred.split("\n"))[0]
         preds.append(pred)
-        
+
         if i == 0:
             print(prefix)
             print(f"PRED: {pred}")
-    
+
     outputs = [row['output'] for ind, row in dataset.items()]
-    score = text_f1(preds=preds, labels = outputs)
-    return score
+    return text_f1(preds=preds, labels = outputs)
     
 
 def main():
@@ -206,9 +197,9 @@ def main():
         "text_generation": text_generation,
         "question_generation": question_generation
     }
-    
+
     manifest, model_name = get_manifest_session()
-    
+
     synthetic_scores = {}
     for synthetic, function in synthetics.items():
         print(f"RUNNING {synthetic}")
@@ -217,16 +208,16 @@ def main():
         score = function(dataset, manifest)
         synthetic_scores[synthetic] = score
         print(f"SCORE: {score}")
-    
+
     print(synthetic_scores)
     model_name = model_name.replace("/", "_") 
-    
-    if not os.path.exists(f"results/"):
-        os.makedirs(f"results/")
-    
+
+    if not os.path.exists("results/"):
+        os.makedirs("results/")
+
     with open(f"results/{model_name}_results.json", "w") as f:
         json.dump(synthetic_scores, f)
-        
+
     print(f"Saved to: results/{model_name}_results.json")
     
 if __name__ == "__main__":

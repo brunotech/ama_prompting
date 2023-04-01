@@ -256,8 +256,7 @@ class AmazonProduct(Decomposition):
             total_in_context += num_per_class
             if total_in_context == k_shot:
                 break
-        mini_df = pd.concat(dfs)
-        return mini_df
+        return pd.concat(dfs)
 
     def zero_few_baseline(
         self,
@@ -324,10 +323,12 @@ class AmazonProduct(Decomposition):
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=-1)
         # Do WS
         preds = self.merge_boosted_preds(all_boost_preds, all_boost_train_preds, train_labels, expt_log, expt_log_train)
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(classification_report(labels, [p[i] for p in all_boost_preds], output_dict=True)["accuracy"])
+        individual_accuracies = [
+            classification_report(
+                labels, [p[i] for p in all_boost_preds], output_dict=True
+            )["accuracy"]
+            for i in range(len(all_boost_preds[0]))
+        ]
         report = classification_report(labels, preds, output_dict=True)
         return expt_log, expt_log_train, report["accuracy"], individual_accuracies
 
@@ -350,9 +351,8 @@ class AmazonProduct(Decomposition):
             prompts_across_boost = []
             preds_across_boost = []
             for boost_examples in boost_dfs:
-                all_prompts = []
                 prompt_suffix = summarize(boost_examples[0])
-                summary_prompt = f"{prompt_suffix}\n\nProduct: {{text:}}\nSummarize: the product \"Product\":" 
+                summary_prompt = f"{prompt_suffix}\n\nProduct: {{text:}}\nSummarize: the product \"Product\":"
                 summary_pmp = summary_prompt.format(text=text)
                 output = get_response(
                     summary_pmp,
@@ -361,8 +361,7 @@ class AmazonProduct(Decomposition):
                     max_toks=25,
                 )
                 summary = output.split("\n")[0].split(":")[-1].strip("\n")
-                all_prompts.append(summary_pmp)
-                
+                all_prompts = [summary_pmp]
                 prompt_suffix = categorize(boost_examples[1])
                 category_prompt = f"{prompt_suffix}\n\nProduct: {{text:}}\nSummary: {{summary:}}\nThe summary \"Summary\" fits \"Category\":"
                 category_pmp = category_prompt.format(text=text, summary=summary)

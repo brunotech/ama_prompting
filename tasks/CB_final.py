@@ -217,10 +217,7 @@ class CBDecomp(Decomposition):
                     for a in answer
                     if any(l.lower() in a.lower() for l in labels_names)
                 ]
-                if answer:
-                    answer = answer[0]
-                else:
-                    answer = ""
+                answer = answer[0] if answer else ""
                 answer = "".join(
                     [a for a in answer if a not in [".", ",", "?", ";", ":", "'", '"']]
                 )
@@ -289,10 +286,12 @@ class CBDecomp(Decomposition):
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=-1)
         # Do WS
         preds = self.merge_boosted_preds(all_boost_preds, all_boost_train_preds, train_labels, expt_log, expt_log_train)
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(classification_report(labels, [p[i] for p in all_boost_preds], output_dict=True)["accuracy"])
+        individual_accuracies = [
+            classification_report(
+                labels, [p[i] for p in all_boost_preds], output_dict=True
+            )["accuracy"]
+            for i in range(len(all_boost_preds[0]))
+        ]
         report = classification_report(labels, preds, output_dict=True)
         return expt_log, expt_log_train, report["accuracy"], individual_accuracies
 
@@ -301,10 +300,10 @@ class CBDecomp(Decomposition):
         all_boost_preds = []
         labels = []
 
+        suffix = "True, False, or Neither?"
         for i, (ind, row) in tqdm(
             enumerate(test_data.iterrows()), total=len(test_data)
         ):
-            suffix = "True, False, or Neither?"
             input = row["inputs_pretokenized"]
             passage = input.split("\nQuestion: ")[0]
             statement = (
@@ -322,15 +321,13 @@ class CBDecomp(Decomposition):
             prompts_across_boost = []
             preds_across_boost = []
             for boost_examples in boost_dfs:
-                all_prompts = []
                 question, question_final_prompt = self.get_question(
                     statement, questioner, boost_examples[0], manifest, overwrite_manifest
                 )
                 open_answer, answer_final_prompt = self.open_qa(
                     question, passage, openended_qa, boost_examples[1], manifest, overwrite_manifest
                 )
-                all_prompts.append(question_final_prompt)
-                all_prompts.append(answer_final_prompt)
+                all_prompts = [question_final_prompt, answer_final_prompt]
                 if i == 0:
                     print("\n".join(all_prompts))
                 if "Yes" in open_answer.split():
@@ -341,7 +338,7 @@ class CBDecomp(Decomposition):
                     answer = "Neither"
 
                 answer = answer.lower()
-                
+
                 is_yes = "yes" in answer.split() or "true" in answer.split()
                 is_no = "no" in answer.split() or "false" in answer.split()
                 is_maybe = "neither" in answer.split() or "maybe" in answer.split() or "unknown" in answer.split()

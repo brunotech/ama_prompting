@@ -171,8 +171,7 @@ class BoolQDecomp(Decomposition):
             total_in_context += num_per_class
             if total_in_context == k_shot:
                 break
-        mini_df = pd.concat(dfs)
-        return mini_df
+        return pd.concat(dfs)
 
     def zero_few_baseline(
         self,
@@ -240,10 +239,12 @@ class BoolQDecomp(Decomposition):
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=1000)
         # Do WS
         preds = self.merge_boosted_preds(all_boost_preds, all_boost_train_preds, train_labels, expt_log, expt_log_train)
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(classification_report(labels, [p[i] for p in all_boost_preds], output_dict=True)["accuracy"])
+        individual_accuracies = [
+            classification_report(
+                labels, [p[i] for p in all_boost_preds], output_dict=True
+            )["accuracy"]
+            for i in range(len(all_boost_preds[0]))
+        ]
         report = classification_report(labels, preds, output_dict=True)
         return expt_log, expt_log_train, report["accuracy"], individual_accuracies
 
@@ -263,13 +264,12 @@ class BoolQDecomp(Decomposition):
             gold = row['targets_pretokenized']
             if i == run_limit:
                 break
-            
+
             prompts_across_boost = []
             preds_across_boost = []
             for boost_examples in boost_dfs:
-                all_prompts = []
                 prompt_suffix = extract(boost_examples[0])
-                extract_prompt = f"{prompt_suffix}\n\n----\n\nContext: {{passage:}}\n\nQuestion: {{question:}}?\n\nAnswer:" 
+                extract_prompt = f"{prompt_suffix}\n\n----\n\nContext: {{passage:}}\n\nQuestion: {{question:}}?\n\nAnswer:"
                 extract_pmp = extract_prompt.format(passage=passage, question=question)
                 output = get_response(
                     extract_pmp,
@@ -277,11 +277,10 @@ class BoolQDecomp(Decomposition):
                     overwrite=bool(overwrite_manifest),
                     max_toks=5,
                 )
-                all_prompts.append(extract_pmp)
-                
+                all_prompts = [extract_pmp]
                 if i == 0:
                     print(extract_pmp)
-                
+
                 answer = output.strip("\n").lower()
                 answer = [a for a in answer.split("\n") if a][0]
                 answer = "".join(
@@ -298,7 +297,7 @@ class BoolQDecomp(Decomposition):
                 if is_no and (not is_yes):
                     pred = "No"
                 pred = pred.lower()
-                
+
                 prompts_across_boost.append(all_prompts)
                 preds_across_boost.append(pred)
 

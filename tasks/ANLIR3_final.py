@@ -265,8 +265,7 @@ class ANLIDecomp(Decomposition):
             total_in_context += num_per_class
             if total_in_context == k_shot:
                 break
-        mini_df = pd.concat(dfs)
-        return mini_df
+        return pd.concat(dfs)
 
     def _get_boost_decomp_examples(self, train_data, boost_id):
         seed = [69, 987][boost_id] 
@@ -304,11 +303,10 @@ class ANLIDecomp(Decomposition):
                 questioner_prompt_examples[boost_id],
                 extraction_qa_examples[boost_id],
             ]
-        else:
-            icl_examples = self._get_boost_decomp_examples(train_data, boost_id-3)[0]
-            return [
-                icl_examples
-            ]
+        icl_examples = self._get_boost_decomp_examples(train_data, boost_id-3)[0]
+        return [
+            icl_examples
+        ]
 
     def zero_few_baseline(
         self,
@@ -360,10 +358,7 @@ class ANLIDecomp(Decomposition):
                 answer = [
                     a for a in answer if any(l.lower() in a.lower() for l in labels)
                 ]
-                if answer:
-                    answer = answer[0]
-                else:
-                    answer = ""
+                answer = answer[0] if answer else ""
                 answer = "".join(
                     [a for a in answer if a not in [".", ",", "?", ";", ":", "'", '"']]
                 )
@@ -412,10 +407,7 @@ class ANLIDecomp(Decomposition):
         )
         answer = answer.replace(",", "").replace(".", "").replace("?", "")
         answer = [a for a in answer.split("\n") if a]
-        if answer:
-            answer = answer[0]
-        else:
-            answer = passage
+        answer = answer[0] if answer else passage
         return answer, extract_pmp
 
     def get_question(self, statement, prompt, boost_ex, manifest, overwrite_manifest):
@@ -430,10 +422,7 @@ class ANLIDecomp(Decomposition):
         )
         answer = answer.replace("Question: ", "")
         answer = [a for a in answer.split("\n") if a]
-        if answer:
-            answer = answer[0].strip()
-        else:
-            answer = ''
+        answer = answer[0].strip() if answer else ''
         statement = statement.strip().strip(".")
         if (
             not answer
@@ -492,7 +481,7 @@ class ANLIDecomp(Decomposition):
 
             if i == run_limit:
                 break
-            
+
             text = row["inputs_pretokenized"]
             gold = row["targets_pretokenized"].strip()
             passage = text.split("\n")[0]
@@ -527,8 +516,6 @@ class ANLIDecomp(Decomposition):
                     answer_f = open_answer_f.lower()
                     pred = self.resolve_pred(answer_f)
                     pred = pred.strip().lower()
-
-                    preds_across_boost.append(pred)
 
                 else:
                     icl_str = ""
@@ -568,15 +555,11 @@ class ANLIDecomp(Decomposition):
                     pred = pred.lower().strip()
                     pred = pred.replace(".", "").replace(",", "").replace("Label: ", "").replace("Sentiment:", "")
                     pred = [p for p in pred.split("\n") if p]
-                    if pred:
-                        pred = pred[0]
-                    else:
-                        pred = ""
-
+                    pred = pred[0] if pred else ""
                     all_prompts.append(pmp)
                     prompts_across_boost.append(all_prompts)
                     pred = self.resolve_pred(pred).lower()
-                    preds_across_boost.append(pred)
+                preds_across_boost.append(pred)
 
                 gold = gold.strip().lower()
 

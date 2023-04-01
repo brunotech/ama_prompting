@@ -176,9 +176,7 @@ class Decomposition:
         elif "positive" in uniq:
             pred_map = {"positive": 1, "negative": -1, "neutral": 0}
         pred_map_inv = {v:k for k,v in pred_map.items()}
-        use_pred_map = False
-        if all(p.lower() in pred_map for p in uniq):
-            use_pred_map = True
+        use_pred_map = all((p.lower() in pred_map for p in uniq))
         if use_pred_map:
             # Cast to integers
             boosted_preds = np.array([[pred_map[p.lower()] for p in preds] for preds in boosted_preds])
@@ -188,7 +186,7 @@ class Decomposition:
             train_labels = np.array([pred_map[p.lower()] for p in train_labels])
             if indecisive_ans:
                 indecisive_ans = pred_map[indecisive_ans.lower()]
-        
+
         # Take majority vote
         preds_test = []
         for i, voter_preds in enumerate(boosted_preds):
@@ -238,7 +236,7 @@ class Decomposition:
         )
         save_results = True
         if num_run != len(data_test):
-            print("Using {} rows".format(num_run))
+            print(f"Using {num_run} rows")
             data_test = data_test.iloc[:num_run]
             save_results = False
 
@@ -275,7 +273,10 @@ class Decomposition:
                     raise ValueError("Must return list of dataframes, one per step")
                 for step, boost_df in enumerate(boost_df_steps):
                     boost_df.reset_index().to_feather(save_path / f"boost_examples_{i}_step{step}.feather")
-                    print(f"Saving boost examples to", save_path / f"boost_examples_{i}_step{step}.feather")
+                    print(
+                        "Saving boost examples to",
+                        save_path / f"boost_examples_{i}_step{step}.feather",
+                    )
                     boost_examples_per_step.append(boost_df)
             else:
                 for boost_examples_p in sorted(boost_examples_paths):
@@ -283,7 +284,7 @@ class Decomposition:
                     boost_examples_per_step.append(pd.read_feather(boost_examples_p))
             boost_examples.append(boost_examples_per_step)
 
-        today = datetime.datetime.today().strftime("%m%d%Y")
+        today = datetime.datetime.now().strftime("%m%d%Y")
 
         # Default metrics
         metric_zero = -1.0
@@ -373,7 +374,7 @@ class Decomposition:
         print("Accuracy Boost Decomposed", metric_decomposed)
         if len(exp_zeroshot_decomposed) > 0:
             print("Accuracy Zero Shot Decomposed", metric_zeroshot_decomposed)
-        
+
         metrics = {
             "model_name": model_name,
             "task_name": self.task_name,
@@ -390,4 +391,4 @@ class Decomposition:
         with open(output_metrics, "a") as f:
             f.write(json.dumps(metrics) + "\n")
         print(f"Saved metrics to {output_metrics}")
-        print(f"Saved final data to", Path(args.save_dir) / self.task_name)
+        print("Saved final data to", Path(args.save_dir) / self.task_name)

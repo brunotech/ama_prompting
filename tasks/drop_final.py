@@ -95,7 +95,7 @@ class DropDecomp(Decomposition):
             if len(x['spans']) == 0:
                 labels.append("unknown")
             else:
-                labels.append(x['spans'][0])  
+                labels.append(x['spans'][0])
         train_data['expanded_labels'] = labels
 
         labels = ["unknown"] + list(set(labels))
@@ -113,8 +113,7 @@ class DropDecomp(Decomposition):
             total_in_context += num_per_class
             if total_in_context == k_shot:
                 break
-        mini_df = pd.concat(dfs)
-        return mini_df
+        return pd.concat(dfs)
 
     def zero_few_baseline(
         self,
@@ -195,10 +194,10 @@ class DropDecomp(Decomposition):
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=1)
         # Do WS
         preds = self.merge_boosted_preds(all_boost_preds, all_boost_train_preds, train_labels, expt_log, expt_log_train)
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(text_f1(preds=[p[i] for p in all_boost_preds], golds=labels))
+        individual_accuracies = [
+            text_f1(preds=[p[i] for p in all_boost_preds], golds=labels)
+            for i in range(len(all_boost_preds[0]))
+        ]
         metric = text_f1(preds=preds, golds=labels)
         return expt_log, expt_log_train, metric, individual_accuracies
 

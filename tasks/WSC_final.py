@@ -325,10 +325,7 @@ class WSCDecomp(Decomposition):
             )
             answer = raw_answer.split("\n")
             answer = [a for a in answer if a]
-            if len(answer) <= 0:
-                answer = ""
-            else:
-                answer = answer[0]
+            answer = "" if len(answer) <= 0 else answer[0]
             answer = " ".join(
                 [a.strip(",").strip(".").strip() for a in answer.split()]
             )
@@ -410,10 +407,12 @@ class WSCDecomp(Decomposition):
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=1000)
         # Do WS
         preds = self.merge_boosted_preds(all_boost_preds, all_boost_train_preds, train_labels, expt_log, expt_log_train)
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(classification_report(labels, [p[i] for p in all_boost_preds], output_dict=True)["accuracy"])
+        individual_accuracies = [
+            classification_report(
+                labels, [p[i] for p in all_boost_preds], output_dict=True
+            )["accuracy"]
+            for i in range(len(all_boost_preds[0]))
+        ]
         report = classification_report(labels, preds, output_dict=True)
         return expt_log, expt_log_train, report["accuracy"], individual_accuracies
 
@@ -430,7 +429,6 @@ class WSCDecomp(Decomposition):
             prompts_across_boost = []
             preds_across_boost = []
             for boost_examples in boost_dfs:
-                all_prompts = []
                 text = row['text']
                 gold_answer = row['label_text']
                 pronoun = row['span2_text']
@@ -460,10 +458,7 @@ class WSCDecomp(Decomposition):
                     manifest,
                     overwrite_manifest,
                 )
-                all_prompts.append(extract_prompt)
-                all_prompts.append(convert_prompt)
-                all_prompts.append(answer_prompt)
-
+                all_prompts = [extract_prompt, convert_prompt, answer_prompt]
                 if i == 0:
                     print(extract_prompt)
                     print(convert_prompt)
@@ -475,16 +470,10 @@ class WSCDecomp(Decomposition):
                 gold_no_stop = " ".join([a for a in gold.lower().split() if a not in stops]).lower()
                 answer_no_stop = answer_no_stop.strip("s")
                 gold_no_stop = gold_no_stop.strip("s")
-                if (
-                    answer_no_stop.strip() == gold_no_stop.strip()
-                    or gold_no_stop.strip() == answer_no_stop.strip()
-                ):
-                    pred = "True"
-                else:
-                    pred = "False"
+                pred = "True" if answer_no_stop.strip() == gold_no_stop.strip() else "False"
                 prompts_across_boost.append(all_prompts)
                 preds_across_boost.append(pred)
-            
+
             entry = {
                 "ind": ind,
                 "example": text,

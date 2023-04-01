@@ -162,10 +162,11 @@ def get_retrieved_text(retrieved_datum, top_k=5, rm_date_r=False):
         first_paraph = " ".join(content.split("\n\n")[:2])
         if "title" in article.keys():
             first_paraph = article["title"] + " " + first_paraph
-        if not rm_date_r:
-            retrieved_text += "Article on {}: {}\n".format(date, first_paraph)
-        else:
-            retrieved_text += "Article: {}\n".format(first_paraph)
+        retrieved_text += (
+            f"Article: {first_paraph}\n"
+            if rm_date_r
+            else f"Article on {date}: {first_paraph}\n"
+        )
     return retrieved_text
 
 def read_dates(data_dir, dates):
@@ -298,12 +299,15 @@ class RealtimeQADecomp(Decomposition):
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=1000)
         # Do WS
         preds = self.merge_boosted_preds(all_boost_preds, all_boost_train_preds, train_labels, expt_log, expt_log_train)
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(
-                np.mean([metric_max_over_ground_truths(f1_score, pred, [gold]) for pred, gold in zip([p[i] for p in all_boost_preds], labels)])
+        individual_accuracies = [
+            np.mean(
+                [
+                    metric_max_over_ground_truths(f1_score, pred, [gold])
+                    for pred, gold in zip([p[i] for p in all_boost_preds], labels)
+                ]
             )
+            for i in range(len(all_boost_preds[0]))
+        ]
         metric = np.mean([metric_max_over_ground_truths(f1_score, pred, [gold]) for pred, gold in zip(preds, labels)])
         return expt_log, expt_log_train, metric, individual_accuracies
 
@@ -317,9 +321,9 @@ class RealtimeQADecomp(Decomposition):
         ):
             if i == run_limit:
                 break
-            row["answer"] = [d for d in row["answer"]]
-            row["choices"] = [d for d in row["choices"]]
-            row["gold_answers"] = [d for d in row["gold_answers"]]
+            row["answer"] = list(row["answer"])
+            row["choices"] = list(row["choices"])
+            row["gold_answers"] = list(row["gold_answers"])
 
             question = row["question_sentence"]
             passages = row["passages"]
@@ -328,9 +332,7 @@ class RealtimeQADecomp(Decomposition):
 
             prompts_across_boost = []
             preds_across_boost = []
-            for boost_idx, boost_examples in enumerate(boost_dfs):
-                all_prompts = []
-                
+            for boost_examples in boost_dfs:
                 passage_list = [p for p in passages.split("Article:") if p.strip()]
                 passage_list = [" ".join(p.split(" ")[:100]) for p in passage_list]
                 assert len(passage_list) > 1
@@ -338,7 +340,7 @@ class RealtimeQADecomp(Decomposition):
                 # Art1 answer
                 icl_str = art1_answer(boost_examples[0])
                 pmp = f"{icl_str}\n\n{passages_for_prompt}Question: {question}\nAnswer:"
-                all_prompts.append(pmp)
+                all_prompts = [pmp]
                 raw_answer_art1 = get_response(
                     pmp,
                     manifest,
@@ -363,11 +365,7 @@ class RealtimeQADecomp(Decomposition):
                     max_toks=30,
                 )
                 pred_all = raw_answer_all.split("\n")[0].strip("\"").strip()
-                if pred_art1 == "I don't know":
-                    pred = pred_all
-                else:
-                    pred = pred_art1
-
+                pred = pred_all if pred_art1 == "I don't know" else pred_art1
                 pred = pred.translate(str.maketrans('', '', string.punctuation))
                 pred = pred.lower()
                 # if pred != golds[0].lower() and golds[0].lower() in passages_for_prompt.lower():
@@ -377,7 +375,7 @@ class RealtimeQADecomp(Decomposition):
                 #     print("PRED", pred)
                 prompts_across_boost.append(all_prompts)
                 preds_across_boost.append(pred)
-            
+
             entry = {
                 "ind": ind,
                 "example": row.to_dict(),

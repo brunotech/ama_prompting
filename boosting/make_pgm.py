@@ -53,10 +53,7 @@ class Ising():
     def _get_edges_nodes(self):
         self.nodes = np.arange(self.m)
         self.edges = [p for p in self.potentials if len(p) == 2 and self.m not in p]
-        if self.edges != []:
-            self.higher_order = True
-        else:
-            self.higher_order = False
+        self.higher_order = self.edges != []
 
     def _exponential_family(self, labels):
         x = 0.0
@@ -112,21 +109,17 @@ class Ising():
         for i in range(l):
             for j in range(i + 1, l):
                 M[i, j] = self.joint_p([rvs[i], rvs[j]], [1, 1]) + self.joint_p([rvs[i], rvs[j]], [-1, -1])
-        
+
         for i in range(l):
             for j in range(i + 1):
-                if i != j: 
-                    M[i, j] = M[j, i]
-                else:
-                    M[i, j] = 1
-        
+                M[i, j] = M[j, i] if i != j else 1
         M = 2*M - 1
-        
+
         mu = np.zeros(l)
         for i in range(l):
             mu[i] = self.joint_p([rvs[i]], [1])
         mu = 2*mu - 1
-        
+
         return M - np.outer(mu, mu)
 
     def aug_covariance_y(self, rvs, y):
@@ -136,22 +129,17 @@ class Ising():
         for i in range(l):
             for j in range(i + 1, l):
                 M[i, j] = (self.joint_p([rvs[i], rvs[j], [self.m]], [1, 1, y]) + self.joint_p([rvs[i], rvs[j], [self.m]], [-1, -1, y])) / p_y
-        
+
         for i in range(l):
             for j in range(i + 1):
-                if i != j: 
-                    M[i, j] = M[j, i]
-                else:
-                    M[i, j] = 1
-        
-
+                M[i, j] = M[j, i] if i != j else 1
         M = 2*M - 1
-        
+
         mu = np.zeros(l)
         for i in range(l):
             mu[i] = self.joint_p([rvs[i], [self.m]], [1, y]) / p_y
         mu = 2*mu - 1
-        
+
         return M - np.outer(mu, mu)
 
 
@@ -168,13 +156,9 @@ class Ising():
 
 
     def sample(self):
-        r = np.random.random_sample() 
+        r = np.random.random_sample()
         smaller = np.where(self.cdf < r)[0]
-        if len(smaller) == 0:
-            i = 0 
-        else: 
-            i = smaller.max() + 1
-
+        i = 0 if len(smaller) == 0 else smaller.max() + 1
         return self.support[i]
 
     def make_data(self, n, has_label = True):
@@ -218,22 +202,15 @@ class Ising():
         # Return a minimum spanning tree of G2
 
     def _set_clique_data(self, c_tree):
-        # Create a helper data structure which maps cliques (as tuples of member
-        # sources) --> {start_index, end_index, maximal_cliques}, where
-        # the last value is a set of indices in this data structure    
-        c_data = dict()
-        for i in range(self.m):
-            c_data[i] = {
+        c_data = {
+            i: {
                 "vertices": [i],
-                "max_cliques": set( # which max clique i belongs to
-                    [
-                        j
-                        for j in c_tree.nodes()
-                        if i in c_tree.nodes[j]["members"]
-                    ]
-                ),
+                "max_cliques": {
+                    j for j in c_tree.nodes() if i in c_tree.nodes[j]["members"]
+                },
             }
-
+            for i in range(self.m)
+        }
         # Get the higher-order clique statistics based on the clique tree
         # First, iterate over the maximal cliques (nodes of c_tree) and
         # separator sets (edges of c_tree)
@@ -257,7 +234,7 @@ class Ising():
                     #idx = counter + m
                     c_data[tuple(members)] = {
                         "vertices": members,
-                        "max_cliques": set([item]) if C_type == "node" else set(item),
+                        "max_cliques": {item} if C_type == "node" else set(item),
                     }
                     counter += 1
         return c_data
@@ -324,10 +301,7 @@ class Ising():
         """
         pos = self.get_cond_probs(votes, 1, edgeset)
         neg = self.get_cond_probs(votes, 0, edgeset)
-        if pos == 0:
-            return 0
-        else:
-            return pos / (pos + neg)
+        return 0 if pos == 0 else pos / (pos + neg)
 
 
 
@@ -546,8 +520,12 @@ def test3():
     print(f"Data Programming (no label): {dp_nolabel_acc}")
     print(f"Data Programming (with label): {dp_label_acc}")
 
-    assert 0.69 <= mv_acc <= 0.7 and 0.69 <= pb_acc <= 0.7, f"MV and pick best should be 0.692 and 0.694."
-    assert 0.77 <= min(nb_acc, fs_acc, dp_nolabel_acc, dp_label_acc) <= 0.79, f"All methods should have accuracy 0.78."
+    assert (
+        0.69 <= mv_acc <= 0.7 and 0.69 <= pb_acc <= 0.7
+    ), "MV and pick best should be 0.692 and 0.694."
+    assert (
+        0.77 <= min(nb_acc, fs_acc, dp_nolabel_acc, dp_label_acc) <= 0.79
+    ), "All methods should have accuracy 0.78."
 
     print(f"Test passed: {min(nb_acc, fs_acc, dp_nolabel_acc, dp_label_acc) >= max(mv_acc, pb_acc)}\n")
 
@@ -736,7 +714,7 @@ def test6():
 
     np.random.seed(5)
     thetas = np.random.rand(30)
-    
+
     # model some edges - see if we can recover it
     potentials = [[3], [0, 3], [1, 3], [2, 3], [0, 1], [0, 2]]
 
@@ -758,7 +736,7 @@ def test6():
     # overall accuracies Pr(lf_p = y) on train
     acc_theta = np.zeros(m)
     for i in range(m):
-        acc_theta[i] = len(np.where((train_votes[:, i] == train_gold) == True)[0])/n_train
+        acc_theta[i] = len(np.where(train_votes[:, i] == train_gold)[0]) / n_train
 
     acc_theta = 2*acc_theta - 1
     all_thetas = structure_learning(m, train_votes, train_gold, acc_theta)
@@ -769,13 +747,13 @@ def test6():
     #j = idx % m
     #print(f"Recovered edge: ({i}, {j})") # should be (0, 1)
 
-    ce = np.ones(m*m) * np.inf
-    ce_cond = np.ones(m*m) * np.inf
-    ce_nolabel = np.ones(m*m) * np.inf
+    ce = np.ones(m**2) * np.inf
+    ce_cond = np.ones(m**2) * np.inf
+    ce_nolabel = np.ones(m**2) * np.inf
 
-    true_ce = np.ones(m*m) * np.inf
-    true_ce_cond = np.ones(m*m) * np.inf
-    true_ce_nolabel = np.ones(m*m) * np.inf
+    true_ce = np.ones(m**2) * np.inf
+    true_ce_cond = np.ones(m**2) * np.inf
+    true_ce_nolabel = np.ones(m**2) * np.inf
 
 
     neighborhood_size = len(all_thetas.flatten())
@@ -784,19 +762,16 @@ def test6():
 
     for n in range(neighborhood_size):
         print(f"edgeset size is {n}")
+        edgeset = []
         # try edgeset of size n
         if n != 0:
             idxs = np.argsort(np.abs(all_thetas), axis=None)[-n:]
-            edgeset = []
             for idx in idxs:
                 i = int(np.floor(idx / m))
                 j = idx % m
                 # print(all_thetas[i, j])
                 # print(f"Recovered edge: ({i}, {j})") # should be (0, 1)
                 edgeset.append((i, j))
-        else:
-            edgeset = []
-
         print(edgeset)
         all_edgesets.append(edgeset)
         try:

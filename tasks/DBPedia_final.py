@@ -170,8 +170,7 @@ class DBPediaDecomp(Decomposition):
             total_in_context += num_per_class
             if total_in_context == k_shot:
                 break
-        mini_df = pd.concat(dfs)
-        return mini_df
+        return pd.concat(dfs)
 
     def zero_few_baseline(
         self,
@@ -237,10 +236,12 @@ class DBPediaDecomp(Decomposition):
         expt_log_train, all_boost_train_preds, train_labels = self._run_decomp_single_data(boost_data_train, boost_dfs, manifest, overwrite_manifest, run_limit=1)
         # Do WS
         preds = self.merge_boosted_preds(all_boost_preds, all_boost_train_preds, train_labels, expt_log, expt_log_train)
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0])):
-            individual_accuracies.append(classification_report(labels, [p[i] for p in all_boost_preds], output_dict=True)["accuracy"])
+        individual_accuracies = [
+            classification_report(
+                labels, [p[i] for p in all_boost_preds], output_dict=True
+            )["accuracy"]
+            for i in range(len(all_boost_preds[0]))
+        ]
         report = classification_report(labels, preds, output_dict=True)
         return expt_log, expt_log_train, report["accuracy"], individual_accuracies
 
@@ -263,7 +264,6 @@ class DBPediaDecomp(Decomposition):
             prompts_across_boost = []
             preds_across_boost = []
             for boost_examples in boost_dfs:
-                all_prompts = []
                 prompt_suffix = summarize(boost_examples[0])
                 summarize_prompt = f"{prompt_suffix}\n\nPassage: {{text:}}\nSummarize: the passage \"Passage\":"
                 summarize_pmp = summarize_prompt.format(text=text)
@@ -285,8 +285,7 @@ class DBPediaDecomp(Decomposition):
                 )
                 pred = output.split("\n")[0].strip().lower()
 
-                all_prompts.append(summarize_pmp)
-                all_prompts.append(category_pmp)
+                all_prompts = [summarize_pmp, category_pmp]
                 if i == 0:
                     print(summarize_pmp)
                     print(category_pmp)

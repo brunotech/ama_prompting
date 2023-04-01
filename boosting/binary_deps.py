@@ -89,18 +89,16 @@ class DependentPGM:
     def _set_clique_data(self):
         # Create a helper data structure which maps cliques (as tuples of member
         # sources) --> {start_index, end_index, maximal_cliques}, where
-        # the last value is a set of indices in this data structure    
-        self.c_data = dict()
+        # the last value is a set of indices in this data structure
+        self.c_data = {}
         for i in range(self.m):
             self.c_data[i] = {
                 "vertices": [i],
-                "max_cliques": set( # which max clique i belongs to
-                    [
-                        j
-                        for j in self.c_tree.nodes()
-                        if i in self.c_tree.nodes[j]["members"]
-                    ]
-                ),
+                "max_cliques": {
+                    j
+                    for j in self.c_tree.nodes()
+                    if i in self.c_tree.nodes[j]["members"]
+                },
             }
 
         # Get the higher-order clique statistics based on the clique tree
@@ -126,7 +124,7 @@ class DependentPGM:
                     #idx = counter + m
                     self.c_data[tuple(members)] = {
                         "vertices": members,
-                        "max_cliques": set([item]) if C_type == "node" else set(item),
+                        "max_cliques": {item} if C_type == "node" else set(item),
                     }
                     counter += 1
 
@@ -203,10 +201,7 @@ class DependentPGM:
         """
         pos = self.get_cond_probs(votes, 1)
         neg = self.get_cond_probs(votes, 0)
-        if pos == 0:
-            return 0
-        else:
-            return pos / (pos + neg)
+        return 0 if pos == 0 else pos / (pos + neg)
 
     def evaluate(self, test_votes, test_gold):
         """
@@ -312,7 +307,7 @@ def learn_neighborhood(m, vertex, votes, gold, accs, l1_lambda, epochs = 50000):
     theta.requires_grad_()
 
     optimizer = torch.optim.SGD([theta], lr=0.0001)
-    for t in range(epochs):
+    for _ in range(epochs):
         optimizer.zero_grad()
 
         # logistic regression from Ravikumar et al
@@ -323,11 +318,13 @@ def learn_neighborhood(m, vertex, votes, gold, accs, l1_lambda, epochs = 50000):
         loss.backward()
         optimizer.step()
 
-        #if t % 1000 == 0:
-        #    print(f"Loss: {loss}")
-
-    big_theta = np.concatenate([theta.detach().numpy()[:vertex], [0], theta.detach().numpy()[vertex:m - 1]])
-    return big_theta
+    return np.concatenate(
+        [
+            theta.detach().numpy()[:vertex],
+            [0],
+            theta.detach().numpy()[vertex : m - 1],
+        ]
+    )
 
 # v is the vertex whose neighborhood graph we are estimating 
 def learn_neighborhood_multi(m, vertex, votes, gold, accs, l1_lambda, classes, epochs = 50000):
@@ -347,30 +344,34 @@ def learn_neighborhood_multi(m, vertex, votes, gold, accs, l1_lambda, classes, e
     theta.requires_grad_()
 
     optimizer = torch.optim.SGD([theta], lr=0.0001)
-    for t in range(epochs):
+    for _ in range(epochs):
         optimizer.zero_grad()
 
-        # logistic regression from Ravikumar et al
-        mu = 0
-        for i in range(x_notr.shape[1]):
-            # mu = \sum_i theta_i * \sum_data sign{x_r = x_i}
-            mu += (2*(xr == x_notr[:, i])-1).type(torch.FloatTensor).mean() * theta[i]
-
-        fx = 0
-        for k in classes:
-            # \sum_y exp( \sum_i theta_i sign(x_i = y)) "normalization"
-            fx += torch.exp(torch.matmul((2*(x_notr == k)-1).type(torch.FloatTensor), theta)).mean()
-        
+        mu = sum(
+            (2 * (xr == x_notr[:, i]) - 1).type(torch.FloatTensor).mean()
+            * theta[i]
+            for i in range(x_notr.shape[1])
+        )
+        fx = sum(
+            torch.exp(
+                torch.matmul(
+                    (2 * (x_notr == k) - 1).type(torch.FloatTensor), theta
+                )
+            ).mean()
+            for k in classes
+        )
         loss = fx - mu + l1_lambda * torch.linalg.vector_norm(theta[:m], ord=1)
 
         loss.backward()
         optimizer.step()
 
-        #if t % 1000 == 0:
-        #    print(f"Loss: {loss}")
-
-    big_theta = np.concatenate([theta.detach().numpy()[:vertex], [0], theta.detach().numpy()[vertex:m - 1]])
-    return big_theta
+    return np.concatenate(
+        [
+            theta.detach().numpy()[:vertex],
+            [0],
+            theta.detach().numpy()[vertex : m - 1],
+        ]
+    )
 
 def main():
     # load data

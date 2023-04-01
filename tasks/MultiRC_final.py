@@ -112,11 +112,11 @@ def multirc_metric(preds_by_question, golds_by_question):
         gold_ans = [int(g.lower() == "yes") for g in golds_by_question[p_id]]
         assert len(predicted_ans) == len(gold_ans)
         total_count += len(predicted_ans)
-        if all([p == g for p, g in zip(predicted_ans, gold_ans)]):
+        if all(p == g for p, g in zip(predicted_ans, gold_ans)):
             accuracy_count += 1
         predict_count += sum(predicted_ans)
         correct_count += sum(gold_ans)
-        agreement_count += sum([a * b for (a, b) in zip(gold_ans, predicted_ans)])
+        agreement_count += sum(a * b for (a, b) in zip(gold_ans, predicted_ans))
 
     p1 = (1.0 * agreement_count / predict_count) if predict_count > 0.0 else 1.0
     r1 = (1.0 * agreement_count / correct_count) if correct_count > 0.0 else 1.0
@@ -261,10 +261,15 @@ class MultiRCDecomp(Decomposition):
         for i in range(len(all_boost_preds)):
             preds_unflattened.append([preds[cum_i + j] for j in range(len(all_boost_preds[i]))])
             cum_i += len(all_boost_preds[i])
-        # Get accuracies across all boost sets
-        individual_accuracies = []
-        for i in range(len(all_boost_preds[0][0])):
-            individual_accuracies.append(multirc_metric(preds_by_question=[[p[i] for p in pred_set] for pred_set in all_boost_preds], golds_by_question=labels)["f1a"])
+        individual_accuracies = [
+            multirc_metric(
+                preds_by_question=[
+                    [p[i] for p in pred_set] for pred_set in all_boost_preds
+                ],
+                golds_by_question=labels,
+            )["f1a"]
+            for i in range(len(all_boost_preds[0][0]))
+        ]
         metric = multirc_metric(preds_by_question=preds_unflattened, golds_by_question=labels)["f1a"]
         return expt_log, expt_log_train, metric, individual_accuracies    
     
